@@ -1,7 +1,16 @@
+import sys
+
+assert sys.base_prefix != sys.prefix, "You are running this script in the base environment, please run it in a virtual environment"
+
 import laspy
 import numpy as np
 import open3d as o3d
 from scipy.spatial import ConvexHull
+
+# print versions
+print(f"laspy version: {laspy.__version__}")
+print(f"numpy version: {np.__version__}")
+print(f"open3d version: {o3d.__version__}")
 
 def extract_las_metadata(file_path):
     # Read LAS file
@@ -78,13 +87,15 @@ def remove_ground_plane(file_path, distance_threshold=0.1):
     # Read LAS file
     las = laspy.read(file_path)
 
+
     # Extract points
     points = np.vstack((las.x, las.y, las.z)).transpose()
 
     # Create Open3D point cloud
     pcd = o3d.geometry.PointCloud()
+    print("AAA")
     pcd.points = o3d.utility.Vector3dVector(points)
-
+    print("BBB")
     # Add RGB colors if available
     if hasattr(las, 'red') and hasattr(las, 'green') and hasattr(las, 'blue'):
         # Normalize RGB values to [0,1] range
@@ -116,9 +127,9 @@ def remove_ground_plane(file_path, distance_threshold=0.1):
     # Print ground plane information
     print("\n=== Ground Plane Information ===")
     print(f"Plane equation: {plane_model[0]:.2f}x + {plane_model[1]:.2f}y + {plane_model[2]:.2f}z + {plane_model[3]:.2f} = 0")
-    print(f"Number of ground points: {len(inliers)}")
-    print(f"Number of points above ground: {len(above_plane_indices)}")
-    print(f"Number of points removed: {len(points) - len(above_plane_indices)}")
+    print(f"Number of ground points: {len(inliers):,}")
+    print(f"Number of points above ground: {len(above_plane_indices):,}")
+    print(f"Number of points removed: {len(points) - len(above_plane_indices):,}")
 
     return above_plane, ground
 
@@ -185,11 +196,11 @@ def cluster_points(pcd, eps=0.5, min_points=10):
     # Convert point cloud to numpy array
     points = np.asarray(pcd.points)
 
-    print(f"Number of points before downsampling: {len(points)}")
+    print(f"Number of points before downsampling: {len(points):,}")
     # downsample the point cloud
     pcd = pcd.voxel_down_sample(voxel_size=0.1) # this down
     points = np.asarray(pcd.points)
-    print(f"Number of points after downsampling: {len(points)}")
+    print(f"Number of points after downsampling: {len(points):,}")
 
     # Perform DBSCAN clustering
     from sklearn.cluster import DBSCAN
@@ -290,59 +301,6 @@ def compute_cluster_volumes(pcd, labels):
 
     return cluster_volumes
 
-def normalize_coordinates(pcd, scale=True):
-    """
-    Normalize point cloud coordinates by translating to origin and optionally scaling
-
-    Args:
-        pcd: open3d.geometry.PointCloud
-            The input point cloud
-        scale: bool, optional (default=True)
-            Whether to scale the coordinates after translation
-
-    Returns:
-        open3d.geometry.PointCloud
-            The normalized point cloud
-    """
-    # Get points as numpy array
-    points = np.asarray(pcd.points)
-
-    # Find min and max values
-    min_coords = np.min(points, axis=0)
-    max_coords = np.max(points, axis=0)
-
-    # Translate points to origin
-    translated_points = points - min_coords
-
-    if scale:
-        # Find maximum range in any dimension
-        max_range = np.max(max_coords - min_coords)
-        # Scale all coordinates to fit in [0, 1] range
-        scaled_points = translated_points / max_range
-    else:
-        scaled_points = translated_points
-
-    # Create new point cloud with normalized coordinates
-    normalized_pcd = o3d.geometry.PointCloud()
-    normalized_pcd.points = o3d.utility.Vector3dVector(scaled_points)
-
-    # Copy colors if they exist
-    if pcd.has_colors():
-        normalized_pcd.colors = pcd.colors
-
-    # Print normalization information
-    print("\n=== Coordinate Normalization ===")
-    print(f"Original min coordinates: {min_coords}")
-    print(f"Original max coordinates: {max_coords}")
-    if scale:
-        print(f"Scaling factor: {max_range}")
-        print(f"New coordinates range: [0, 1]")
-    else:
-        print(f"New min coordinates: {np.min(scaled_points, axis=0)}")
-        print(f"New max coordinates: {np.max(scaled_points, axis=0)}")
-
-    return normalized_pcd
-
 if __name__ == "__main__":
     las_file = "data/1 stockpile 19-13-2025_group1_densified_point_cloud.las"
     # las_file = "data/Stockpile 2 19-03-2025_group1_densified_point_cloud.las"
@@ -353,15 +311,12 @@ if __name__ == "__main__":
     # Remove ground plane and visualize both ground and non-ground points
     non_ground, ground = remove_ground_plane(las_file, distance_threshold=6)
 
-    # Normalize coordinates
-    non_ground = normalize_coordinates(non_ground, scale=True)
-
     # Perform clustering on the non-ground points
-    # labels, n_clusters, pcd = cluster_points(non_ground, eps=2, min_points=500)
+    labels, n_clusters, pcd = cluster_points(non_ground, eps=2, min_points=500)
 
     # Compute and print cluster volumes
-    # cluster_volumes = compute_cluster_volumes(pcd, labels)
+    cluster_volumes = compute_cluster_volumes(pcd, labels)
 
     # Visualize the clusters
-    # visualize_clusters(pcd, labels)
-    visualize_las_file(las_file, use_rgb=True)
+    visualize_clusters(pcd, labels)
+    # visualize_las_file(las_file, use_rgb=True)
