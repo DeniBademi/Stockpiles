@@ -1,6 +1,6 @@
 import sys
 
-assert sys.base_prefix != sys.prefix, "You are running this script in the base environment, please run it in a virtual environment"
+# assert sys.base_prefix != sys.prefix, "You are running this script in the base environment, please run it in a virtual environment"
 
 import laspy
 import numpy as np
@@ -309,7 +309,7 @@ if __name__ == "__main__":
     las = extract_las_metadata(las_file)
 
     # Remove ground plane and visualize both ground and non-ground points
-    non_ground, ground = remove_ground_plane(las_file, distance_threshold=6)
+    non_ground, ground = remove_ground_plane(las_file, distance_threshold=4.5)
 
     # Perform clustering on the non-ground points
     labels, n_clusters, pcd = cluster_points(non_ground, eps=2, min_points=500)
