@@ -319,7 +319,6 @@ def convert_ply_to_las(ply_file, las_file):
         las.blue = rgb[:, 2]
 
     las.write(las_file)
-    print("Exported to output.las")
 
 if __name__ == "__main__":
     las_file = "data/1 stockpile 19-13-2025_group1_densified_point_cloud.las"
