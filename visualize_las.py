@@ -32,9 +32,9 @@ def extract_las_metadata(file_path):
 
     # Spatial extent
     print("\n=== Spatial Extent ===")
-    print(f"X range: {las.header.x_min:.2f} to {las.header.x_max:.2f}, {las.header.x_max - las.header.x_min:.2f} meters")
-    print(f"Y range: {las.header.y_min:.2f} to {las.header.y_max:.2f}, {las.header.y_max - las.header.y_min:.2f} meters")
-    print(f"Z range: {las.header.z_min:.2f} to {las.header.z_max:.2f}, {las.header.z_max - las.header.z_min:.2f} meters")
+    print(f"X range: {las.header.x_min:.2f} to {las.header.x_max:.2f}")
+    print(f"Y range: {las.header.y_min:.2f} to {las.header.y_max:.2f}")
+    print(f"Z range: {las.header.z_min:.2f} to {las.header.z_max:.2f}")
 
     # Available point attributes
     print("\n=== Available Point Attributes ===")
@@ -170,6 +170,7 @@ def visualize_las_file(file_path, use_rgb=True, only_non_ground=False):
     # Visualize
     o3d.visualization.draw_geometries([pcd])
 
+
 def visualize_pcd(pcd, plot_rgb=True):
 
     # Visualize
@@ -300,48 +301,22 @@ def compute_cluster_volumes(pcd, labels):
 
     return cluster_volumes
 
-
-
-def convert_ply_to_las(ply_file, las_file):
-    pcd = o3d.io.read_point_cloud(ply_file)
-    points = np.asarray(pcd.points)
-
-    las = laspy.create(point_format=3, file_version="1.2")
-
-    las.x = -points[:, 0]
-    las.y = -points[:, 1]
-    las.z = -points[:, 2]
-
-    if pcd.has_colors():
-        rgb = (np.asarray(pcd.colors) * 65535).astype(np.uint16)  # LAS uses 16-bit colors
-        las.red = rgb[:, 0]
-        las.green = rgb[:, 1]
-        las.blue = rgb[:, 2]
-
-    las.write(las_file)
-    print("Exported to output.las")
-
 if __name__ == "__main__":
     las_file = "data/1 stockpile 19-13-2025_group1_densified_point_cloud.las"
-
-    ply_file = "data/flight_1/workspace/sparse/0/points3D.ply"
-    # las_file = "data/flight_1/workspace/sparse/0/points3D.las"
-    # convert_ply_to_las(ply_file, las_file)
     # las_file = "data/Stockpile 2 19-03-2025_group1_densified_point_cloud.las"
 
     # Extract metadata
     las = extract_las_metadata(las_file)
 
-    # # Remove ground plane and visualize both ground and non-ground points
-    # non_ground, ground = remove_ground_plane(las_file, distance_threshold=1.5)
+    # Remove ground plane and visualize both ground and non-ground points
+    non_ground, ground = remove_ground_plane(las_file, distance_threshold=4.5)
 
-    # # visualize_pcd(non_ground)
-    # # # Perform clustering on the non-ground points
-    # labels, n_clusters, pcd = cluster_points(non_ground, eps=1, min_points=50)
+    # Perform clustering on the non-ground points
+    labels, n_clusters, pcd = cluster_points(non_ground, eps=2, min_points=500)
 
-    # # Compute and print cluster volumes
-    # cluster_volumes = compute_cluster_volumes(pcd, labels)
+    # Compute and print cluster volumes
+    cluster_volumes = compute_cluster_volumes(pcd, labels)
 
-    # # Visualize the clusters
-    # visualize_clusters(non_ground, labels)
+    # Visualize the clusters
+    visualize_clusters(pcd, labels)
     # visualize_las_file(las_file, use_rgb=True)

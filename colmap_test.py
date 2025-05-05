@@ -38,15 +38,6 @@ def run_colmap_sparse_reconstruction(image_dir, workspace_dir):
     ], check=True)
 
     print(f"Sparse model saved to: {sparse_model_path}")
-    visualize_sparse_model(sparse_model_path)
-
-def visualize_sparse_model(model_path):
-    ply_path = os.path.join(model_path, "0", "points3D.ply")
-    if not os.path.exists(ply_path):
-        print(f"PLY file not found at {ply_path}")
-        return
-    pcd = o3d.io.read_point_cloud(ply_path)
-    o3d.visualization.draw_geometries([pcd])
 
 if __name__ == "__main__":
     # Replace these with your actual paths
