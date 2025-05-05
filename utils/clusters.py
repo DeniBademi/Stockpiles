@@ -2,6 +2,22 @@ import numpy as np
 import open3d as o3d
 from scipy.spatial import ConvexHull
 
+def downsample_pcd(pcd: o3d.geometry.PointCloud, voxel_size=0.1, verbose=True):
+    """
+    Downsample the point cloud using a voxel grid
+    """
+
+    points = np.asarray(pcd.points)
+    if verbose:
+        print(f"\n=== Downsampling Information ===")
+        print(f"Number of points before downsampling: {len(points):,}")
+    pcd = pcd.voxel_down_sample(voxel_size=voxel_size)
+
+    points = np.asarray(pcd.points)
+    if verbose:
+        print(f"Number of points after downsampling: {len(points):,}")
+    return pcd
+
 def cluster_points(pcd, eps=0.5, min_points=10):
     """
     Perform DBSCAN clustering on the point cloud
@@ -21,12 +37,12 @@ def cluster_points(pcd, eps=0.5, min_points=10):
     """
     # Convert point cloud to numpy array
     points = np.asarray(pcd.points)
-
     print(f"Number of points before downsampling: {len(points):,}")
+
+
     # downsample the point cloud
-    pcd = pcd.voxel_down_sample(voxel_size=0.1) # this down
+    pcd = downsample_pcd(pcd)
     points = np.asarray(pcd.points)
-    print(f"Number of points after downsampling: {len(points):,}")
 
     # Perform DBSCAN clustering
     from sklearn.cluster import DBSCAN
@@ -70,8 +86,23 @@ def visualize_clusters(pcd, labels):
     # Assign colors to the point cloud
     pcd.colors = o3d.utility.Vector3dVector(colors)
 
+    points = np.asarray(pcd.points)
+    max_extent = max(
+        np.max(points[:, 0]) - np.min(points[:, 0]),
+        np.max(points[:, 1]) - np.min(points[:, 1]),
+        np.max(points[:, 2]) - np.min(points[:, 2])
+    )
+    frame_size = max_extent * 0.1  # 10% of the maximum extent
+
+    # Create coordinate frame at the origin
+    coordinate_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(
+        size=frame_size,
+        origin=[0, 0, 0]
+    )
+
+
     # Visualize
-    o3d.visualization.draw_geometries([pcd])
+    o3d.visualization.draw_geometries([pcd, coordinate_frame])
 
 def compute_cluster_volumes(pcd, labels):
     """

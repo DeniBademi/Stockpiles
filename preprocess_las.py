@@ -7,8 +7,10 @@ import numpy as np
 import open3d as o3d
 from scipy.spatial import ConvexHull
 
-from utils.point_cloud import align_with_principal_axes
-from utils.visualization import visualize_las_file
+from utils.point_cloud import remove_ground_plane, align_with_principal_axes, center_point_cloud, remove_outliers
+from utils.clusters import cluster_points, compute_cluster_volumes, downsample_pcd, visualize_clusters
+from utils.visualization import load_pcd_from_file, visualize_las_file, visualize_pcd
+
 
 def extract_las_metadata(file_path, align_pca=False):
     """
@@ -85,69 +87,33 @@ def extract_las_metadata(file_path, align_pca=False):
 
     return las
 
-
-def select_two_points_and_measure(file_path):
-    las = laspy.read(file_path)
-    points = np.vstack((las.x, las.y, las.z)).transpose()
-
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(points)
-
-    print("Please select exactly 2 points using Shift + left click. Press Q when done.")
-    vis = o3d.visualization.VisualizerWithEditing()
-    vis.create_window()
-    vis.add_geometry(pcd)
-    vis.run()
-    vis.destroy_window()
-
-    picked_ids = vis.get_picked_points()
-    if len(picked_ids) != 2:
-        print(f"❗ Expected 2 points, but got {len(picked_ids)}. Try again.")
-        return
-
-    pt1 = points[picked_ids[0]]
-    pt2 = points[picked_ids[1]]
-    dist = np.linalg.norm(pt1 - pt2)
-
-    print(f"\n📍 Point 1: {pt1}")
-    print(f"📍 Point 2: {pt2}")
-    print(f"📏 Distance: {dist:.3f} meters")
-
 if __name__ == "__main__":
-    las_file = "data/1 stockpile 19-13-2025_group1_densified_point_cloud.las"
-    # las_file = "data/Stockpile 2 19-03-2025_group1_densified_point_cloud.las"
 
-    ply_file = "data/flight_1/workspace/sparse/0/points3D.ply"
-    # las_file = "data/flight_1/workspace/sparse/0/points3D_filtered.las"
-    # select_two_points_and_measure(las_file)
-    # convert_ply_to_las(ply_file, las_file)
 
-    # las_file = "scaled_output.las"
-    # visualize_las_file(las_file, use_rgb=True)
+    # las_file = "data/1 stockpile 19-13-2025_group1_densified_point_cloud.las"
+    las_file = "data/flight_1/workspace/sparse/0/points3D.las"
+    pcd = load_pcd_from_file(las_file)
+    # visualize_pcd(pcd, plot_rgb=True)
 
-    # las = extract_las_metadata(las_file, align_pca=True)
-    # visualize_las_file(las_file, use_rgb=True, align_pca=True)
-    # # Remove ground plane and visualize both ground and non-ground points
-    # non_ground, ground = remove_ground_plane(las_file, distance_threshold=4.5)
+    #remove outliers
+    pcd = remove_outliers(pcd)
+
+    # downsample
+    pcd = downsample_pcd(pcd, voxel_size=0.1, verbose=False)
+
+    # normalize coordinates
+    pcd = center_point_cloud(pcd, verbose=False)
+
+    # align with principal axes
+    pcd = align_with_principal_axes(pcd, verbose=True)
+
+    # remove ground plane
+    non_ground, ground = remove_ground_plane(pcd, distance_threshold=4.5)
+    # visualize_pcd(non_ground, plot_rgb=True)
 
     # # Perform clustering on the non-ground points
-    # labels, n_clusters, pcd = cluster_points(non_ground, eps=2, min_points=500)
+    labels, n_clusters, pcd = cluster_points(non_ground, eps=2, min_points=50)
+    visualize_clusters(pcd, labels)
 
     # # Compute and print cluster volumes
-    # cluster_volumes = compute_cluster_volumes(pcd, labels)
-
-    # # Visualize the clusters
-    # visualize_clusters(pcd, labels)
-    # visualize_las_file(las_file, use_rgb=True)
-
-
-# Original las file:
-# X range: 375140.58 to 375276.53, 135.95 meters
-# Y range: 6309471.52 to 6309642.49, 170.97 meters
-# Z range: 75.72 to 90.27, 14.55 meters
-
-# Ours:
-# === Spatial Extent ===
-# X range: -29.39 to 28.95, 58.34 meters
-# Y range: -48.52 to 40.43, 88.94 meters
-# Z range: -23.58 to 9.27, 32.86 meters
+    cluster_volumes = compute_cluster_volumes(pcd, labels)

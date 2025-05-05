@@ -99,10 +99,9 @@ def run_colmap_sparse_reconstruction(image_dir, workspace_dir):
     convert_ply_to_las(ply_path, las_path)
 
     # Step 7: Remove outliers
-    filtered_las_path = remove_outliers(las_path, nb_neighbors=20, std_ratio=2.0)
+    # filtered_las_path = remove_outliers(las_path, nb_neighbors=20, std_ratio=2.0)
 
     print(f"Sparse model saved to: {sparse_model_path}")
-    return filtered_las_path
 
 if __name__ == "__main__":
     # Replace these with your actual paths
@@ -110,4 +109,4 @@ if __name__ == "__main__":
     workspace_dir = "data/flight_1/workspace"
 
     # Run the reconstruction
-    filtered_las_path = run_colmap_sparse_reconstruction(image_dir, workspace_dir)
+    run_colmap_sparse_reconstruction(image_dir, workspace_dir)

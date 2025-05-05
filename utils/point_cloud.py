@@ -22,29 +22,11 @@ def remove_outliers(pcd, nb_neighbors=20, std_ratio=2.0):
     cl, ind = pcd.remove_statistical_outlier(nb_neighbors=nb_neighbors, std_ratio=std_ratio)
     return pcd.select_by_index(ind)
 
-def remove_ground_plane(file_path, distance_threshold=0.1):
+def remove_ground_plane(pcd, distance_threshold=0.1):
     """
     Remove the ground plane and points below it from the point cloud
     """
-    # Read LAS file
-    las = laspy.read(file_path)
 
-
-    # Extract points
-    points = np.vstack((las.x, las.y, las.z)).transpose()
-
-    # Create Open3D point cloud
-    pcd = o3d.geometry.PointCloud()
-    print("AAA")
-    pcd.points = o3d.utility.Vector3dVector(points)
-    print("BBB")
-    # Add RGB colors if available
-    if hasattr(las, 'red') and hasattr(las, 'green') and hasattr(las, 'blue'):
-        # Normalize RGB values to [0,1] range
-        colors = np.vstack((las.red, las.green, las.blue)).transpose() / 65535.0
-        pcd.colors = o3d.utility.Vector3dVector(colors)
-        print("\n=== RGB Information ===")
-        print(f"RGB values range: {np.min(colors)} to {np.max(colors)}")
 
     # Detect ground plane
     plane_model, inliers = detect_ground_plane(pcd, distance_threshold)
@@ -66,6 +48,7 @@ def remove_ground_plane(file_path, distance_threshold=0.1):
     # Get ground points (for visualization)
     ground = pcd.select_by_index(inliers)
 
+    points = np.asarray(pcd.points)
     # Print ground plane information
     print("\n=== Ground Plane Information ===")
     print(f"Plane equation: {plane_model[0]:.2f}x + {plane_model[1]:.2f}y + {plane_model[2]:.2f}z + {plane_model[3]:.2f} = 0")
@@ -75,7 +58,7 @@ def remove_ground_plane(file_path, distance_threshold=0.1):
 
     return above_plane, ground
 
-def center_point_cloud(pcd):
+def center_point_cloud(pcd, verbose=True):
     """
     Center the point cloud by subtracting the mean from each axis.
 
@@ -97,9 +80,10 @@ def center_point_cloud(pcd):
     if pcd.has_colors():
         centered_pcd.colors = pcd.colors
 
-    print("\n=== Centering Information ===")
-    print(f"Original mean: {mean}")
-    print(f"New mean: {np.mean(centered_points, axis=0)}")
+    if verbose:
+        print("\n=== Centering Information ===")
+        print(f"Original mean: {mean}")
+        print(f"New mean: {np.mean(centered_points, axis=0)}")
 
     return centered_pcd
 
@@ -121,9 +105,9 @@ def convert_ply_to_las(ply_path, las_path):
     header.scales = np.array([0.001, 0.001, 0.001])  # 1mm precision
 
     las = laspy.LasData(header)
-    las.x = -points[:, 0]
-    las.y = -points[:, 1]
-    las.z = -points[:, 2]
+    las.x = points[:, 0]
+    las.y = points[:, 1]
+    las.z = points[:, 2]
 
     if pcd.has_colors():
         rgb = (np.asarray(pcd.colors) * 65535).astype(np.uint16)
@@ -178,41 +162,6 @@ def compute_cluster_volumes(pcd, labels):
 
     return cluster_volumes
 
-def center_point_cloud(pcd):
-    """
-    Center the point cloud by subtracting the mean from each axis.
-
-    Args:
-        pcd: open3d.geometry.PointCloud
-            The input point cloud
-
-    Returns:
-        open3d.geometry.PointCloud
-            The centered point cloud
-    """
-    # Get points as numpy array
-    points = np.asarray(pcd.points)
-
-    # Calculate mean for each axis
-    mean = np.mean(points, axis=0)
-
-    # Subtract mean from all points
-    centered_points = points - mean
-
-    # Create new point cloud with centered points
-    centered_pcd = o3d.geometry.PointCloud()
-    centered_pcd.points = o3d.utility.Vector3dVector(centered_points)
-
-    # Copy colors if they exist
-    if pcd.has_colors():
-        centered_pcd.colors = pcd.colors
-
-    print("\n=== Centering Information ===")
-    print(f"Original mean: {mean}")
-    print(f"New mean: {np.mean(centered_points, axis=0)}")
-
-    return centered_pcd
-
 def detect_ground_plane(pcd, distance_threshold=0.1, ransac_n=3, num_iterations=1000):
     """
     Detect the ground plane using RANSAC
@@ -239,35 +188,46 @@ def detect_ground_plane(pcd, distance_threshold=0.1, ransac_n=3, num_iterations=
                                             num_iterations=num_iterations)
     return plane_model, inliers
 
-def align_with_principal_axes(pcd, verbose=True):
+def align_with_principal_axes(pcd, verbose=True) -> np.ndarray:
     """
-    Align the point cloud with its principal axes using PCA.
-    More robust version that handles sparse point clouds better.
+    Aligns a point cloud with its principal axes and ensures consistent orientation.
+    Uses a robust approach that:
+    1. Removes outliers before PCA
+    2. Ensures consistent axis orientation
+    3. Handles edge cases better
 
     Args:
-        pcd: open3d.geometry.PointCloud
-            The input point cloud
-        verbose: bool
-            Whether to print detailed information
+        pcd: Either an Open3D point cloud or numpy array of shape (N, 3)
 
     Returns:
-        open3d.geometry.PointCloud
-            The aligned point cloud
+        Aligned point cloud as numpy array of shape (N, 3)
     """
-    # Get points as numpy array
-    points = np.asarray(pcd.points)
+    # Convert Open3D point cloud to numpy array if needed
+    if isinstance(pcd, o3d.geometry.PointCloud):
+        points = np.asarray(pcd.points)
+    else:
+        points = pcd
 
-    # Center the points
-    mean = np.mean(points, axis=0)
-    centered_points = points - mean
+    # # Remove outliers using IQR method
+    # Q1 = np.percentile(points, 25, axis=0)
+    # Q3 = np.percentile(points, 75, axis=0)
+    # IQR = Q3 - Q1
+    # lower_bound = Q1 - 1.5 * IQR
+    # upper_bound = Q3 + 1.5 * IQR
+    # mask = np.all((points >= lower_bound) & (points <= upper_bound), axis=1)
+    # points_clean = points[mask]
+
+    # # Center the points
+    # centroid = np.mean(points_clean, axis=0)
+    # points_centered = points_clean - centroid
 
     # Compute covariance matrix
-    cov_matrix = np.cov(centered_points.T)
+    cov_matrix = np.cov(points.T)
 
-    # Get eigenvectors and eigenvalues
+    # Get eigenvalues and eigenvectors
     eigenvalues, eigenvectors = np.linalg.eigh(cov_matrix)
 
-    # Sort eigenvectors by eigenvalues in descending order
+    # Sort eigenvalues and eigenvectors in descending order
     idx = eigenvalues.argsort()[::-1]
     eigenvalues = eigenvalues[idx]
     eigenvectors = eigenvectors[:, idx]
@@ -279,45 +239,31 @@ def align_with_principal_axes(pcd, verbose=True):
     # Create rotation matrix
     rotation_matrix = eigenvectors.T
 
-    # Apply rotation
-    aligned_points = np.dot(centered_points, rotation_matrix)
+    # Apply rotation to all points
+    points_rotated = np.dot(points, rotation_matrix.T)
 
     # Check if we need to flip any axes
     # This helps ensure consistent orientation for sparse point clouds
     for i in range(3):
         # If the spread is more negative than positive, flip the axis
-        if np.sum(aligned_points[:, i] < 0) > np.sum(aligned_points[:, i] > 0):
-            aligned_points[:, i] = -aligned_points[:, i]
+        if np.sum(points_rotated[:, i] < 0) < np.sum(points_rotated[:, i] > 0):
+            print(f"Flipping axis {i+1}")
+            points_rotated[:, i] = -points_rotated[:, i]
             rotation_matrix[i, :] = -rotation_matrix[i, :]
 
-    # Create new point cloud with aligned points
-    aligned_pcd = o3d.geometry.PointCloud()
-    aligned_pcd.points = o3d.utility.Vector3dVector(aligned_points)
 
-    # Copy colors if they exist
+    # Print alignment information
+    if verbose:
+        print(f"\nAlignment Information:")
+        print(f"Principal axes (eigenvectors):")
+        for i, (val, vec) in enumerate(zip(eigenvalues, eigenvectors.T)):
+            print(f"Axis {i+1} (variance: {val:.2f}): {vec}")
+
+        print(f"\nRotation matrix:")
+        print(rotation_matrix)
+
+    aligned_pcd = o3d.geometry.PointCloud()
+    aligned_pcd.points = o3d.utility.Vector3dVector(points_rotated)
     if pcd.has_colors():
         aligned_pcd.colors = pcd.colors
-
-    if verbose:
-        print("\n=== PCA Alignment Information ===")
-        print("Original mean:", mean)
-        print("New mean:", np.mean(aligned_points, axis=0))
-        print("Eigenvalues (variances):", eigenvalues)
-        print("Principal directions:")
-        for i, (val, vec) in enumerate(zip(eigenvalues, eigenvectors.T)):
-            print(f"Direction {i+1}: {vec} (variance: {val:.2f})")
-
-        # Print extent information
-        print("\nExtent before alignment:")
-        for i, axis in enumerate(['X', 'Y', 'Z']):
-            min_val = np.min(points[:, i])
-            max_val = np.max(points[:, i])
-            print(f"{axis}: {min_val:.2f} to {max_val:.2f}, range: {max_val - min_val:.2f}")
-
-        print("\nExtent after alignment:")
-        for i, axis in enumerate(['X', 'Y', 'Z']):
-            min_val = np.min(aligned_points[:, i])
-            max_val = np.max(aligned_points[:, i])
-            print(f"{axis}: {min_val:.2f} to {max_val:.2f}, range: {max_val - min_val:.2f}")
-
     return aligned_pcd
