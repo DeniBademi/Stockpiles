@@ -8,25 +8,33 @@ def run_colmap_sparse_reconstruction(image_dir, workspace_dir):
 
     os.makedirs(sparse_model_path, exist_ok=True)
 
-    # Step 1: Feature Extraction
-    subprocess.run([
-        "colmap", "feature_extractor",
-        "--database_path", database_path,
-        "--image_path", image_dir
-    ], check=True)
+    # # Step 1: Feature Extraction
+    # subprocess.run([
+    #     "colmap", "feature_extractor",
+    #     "--database_path", database_path,
+    #     "--image_path", image_dir
+    # ], check=True)
 
-    # Step 2: Feature Matching
-    subprocess.run([
-        "colmap", "exhaustive_matcher",
-        "--database_path", database_path
-    ], check=True)
+    # # Step 2: Feature Matching
+    # subprocess.run([
+    #     "colmap", "exhaustive_matcher",
+    #     "--database_path", database_path
+    # ], check=True)
 
-    # Step 3: Sparse Reconstruction
+    # # Step 3: Sparse Reconstruction
+    # subprocess.run([
+    #     "colmap", "mapper",
+    #     "--database_path", database_path,
+    #     "--image_path", image_dir,
+    #     "--output_path", sparse_model_path
+    # ], check=True)
+
+    # Step 4: Convert to PLY
     subprocess.run([
-        "colmap", "mapper",
-        "--database_path", database_path,
-        "--image_path", image_dir,
-        "--output_path", sparse_model_path
+        "colmap", "model_converter",
+        "--input_path", os.path.join(sparse_model_path, "0"),
+        "--output_path", os.path.join(sparse_model_path, "0", "points3D.ply"),
+        "--output_type", "LAS"
     ], check=True)
 
     print(f"Sparse model saved to: {sparse_model_path}")

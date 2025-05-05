@@ -1,0 +1,15 @@
+data/
+.idea/
+.vscode/
+.trunk/
+venv/
+venv2/
+
+
+*.las
+*.ply
+*.pcd
+*.las
+*.ply
+*.pcd
+*.las
