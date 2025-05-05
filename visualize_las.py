@@ -301,6 +301,26 @@ def compute_cluster_volumes(pcd, labels):
 
     return cluster_volumes
 
+
+
+def convert_ply_to_las(ply_file, las_file):
+    pcd = o3d.io.read_point_cloud(ply_file)
+    points = np.asarray(pcd.points)
+
+    las = laspy.create(point_format=3, file_version="1.2")
+
+    las.x = -points[:, 0]
+    las.y = -points[:, 1]
+    las.z = -points[:, 2]
+
+    if pcd.has_colors():
+        rgb = (np.asarray(pcd.colors) * 65535).astype(np.uint16)  # LAS uses 16-bit colors
+        las.red = rgb[:, 0]
+        las.green = rgb[:, 1]
+        las.blue = rgb[:, 2]
+
+    las.write(las_file)
+
 if __name__ == "__main__":
     las_file = "data/1 stockpile 19-13-2025_group1_densified_point_cloud.las"
     # las_file = "data/Stockpile 2 19-03-2025_group1_densified_point_cloud.las"
